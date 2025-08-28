@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      - POSTGRES_DB=rag_database
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup_database.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "8080:8080"
+    environment:
+      - DEBUG=False
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8080
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    environment:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=rag_database
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - REDIS_URL=redis://redis:6379/0
+      - MCP_SERVER_URL=http://mcp-server:8080
+      - DEFAULT_LLM_MODEL=gpt-3.5-turbo
+      - LLM_TEMPERATURE=0.7
+      - LLM_MAX_TOKENS=2000
+    volumes:
+      - ./media:/app/media
+      - ./staticfiles:/app/staticfiles
+    command: >
+      sh -c "python manage.py makemigrations vector_store graph_rag rag_core mcp_integration &&
+             python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 rag_project.wsgi:application"
+    restart: unless-stopped
+
+  celery:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+      - mcp-server
+    environment:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=rag_database
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - REDIS_URL=redis://redis:6379/0
+      - MCP_SERVER_URL=http://mcp-server:8080
+    command: celery -A rag_project worker -l info
+    volumes:
+      - ./media:/app/media
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+      - mcp-server
+    environment:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=rag_database
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - REDIS_URL=redis://redis:6379/0
+      - MCP_SERVER_URL=http://mcp-server:8080
+    command: celery -A rag_project beat -l info
+    volumes:
+      - ./media:/app/media
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
