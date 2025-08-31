@@ -19,7 +19,6 @@ if __name__ == '__main__':
     print("📝 Make sure you have set your API keys in the .env file:")
     print("   - OPENAI_API_KEY=your_key_here")
     print("   - ANTHROPIC_API_KEY=your_key_here")
-    print("   - COHERE_API_KEY=your_key_here")
     print()
     
     try:

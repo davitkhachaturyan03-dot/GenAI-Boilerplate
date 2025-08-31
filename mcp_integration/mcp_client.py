@@ -1,9 +1,9 @@
 import json
-import asyncio
 import aiohttp
 from typing import Dict, Any, List, Optional, AsyncGenerator
 from dataclasses import dataclass
 from django.conf import settings
+from asgiref.sync import sync_to_async
 
 from .models import MCPServer, MCPRequest, MCPTool, MCPToolExecution
 
@@ -194,7 +194,7 @@ class MCPClient:
 
 class MCPManager:
     """Manager class for handling multiple MCP servers and requests."""
-    
+
     @staticmethod
     async def create_request(
         server: MCPServer,
@@ -203,64 +203,65 @@ class MCPManager:
         parameters: Dict[str, Any]
     ) -> MCPRequest:
         """Create and execute an MCP request."""
-        request = MCPRequest.objects.create(
+        request = await sync_to_async(MCPRequest.objects.create)(
             server=server,
             request_type=request_type,
             prompt=prompt,
             parameters=parameters,
             status='pending'
         )
-        
+
         try:
-            request.status = 'processing'
-            request.save()
-            
+            await sync_to_async(setattr)(request, 'status', 'processing')
+            await sync_to_async(request.save)()
+
             async with MCPClient(server) as client:
-                if request_type == 'chat':
-                    messages = parameters.get('messages', [{'role': 'user', 'content': prompt}])
-                    response = await client.chat_completion(
-                        messages=messages,
-                        temperature=parameters.get('temperature', 0.7),
-                        max_tokens=parameters.get('max_tokens', 2000),
-                        tools=parameters.get('tools')
-                    )
-                    
-                    request.response = response.content
-                    request.response_metadata = response.metadata
-                    request.token_usage = response.token_usage
-                    request.processing_time = response.processing_time
-                    request.status = response.status
-                    request.error_message = response.error or ""
-                
-                elif request_type == 'embedding':
-                    texts = parameters.get('texts', [prompt])
-                    response = await client.create_embedding(texts)
-                    
-                    if 'error' in response:
-                        request.status = 'failed'
-                        request.error_message = response['error']
-                    else:
-                        request.response = json.dumps(response)
-                        request.status = 'completed'
-                
-                elif request_type == 'function_call':
-                    tool_name = parameters.get('tool_name', '')
-                    tool_params = parameters.get('tool_parameters', {})
-                    response = await client.execute_tool(tool_name, tool_params)
-                    
-                    if 'error' in response:
-                        request.status = 'failed'
-                        request.error_message = response['error']
-                    else:
-                        request.response = json.dumps(response)
-                        request.status = 'completed'
-        
+                match request_type:
+                    case 'chat':
+                        messages = parameters.get('messages', [{'role': 'user', 'content': prompt}])
+                        response = await client.chat_completion(
+                            messages=messages,
+                            temperature=parameters.get('temperature', 0.7),
+                            max_tokens=parameters.get('max_tokens', 2000),
+                            tools=parameters.get('tools')
+                        )
+
+                        await sync_to_async(setattr)(request, 'response', response.content)
+                        await sync_to_async(setattr)(request, 'response_metadata', response.metadata)
+                        await sync_to_async(setattr)(request, 'token_usage', response.token_usage)
+                        await sync_to_async(setattr)(request, 'processing_time', response.processing_time)
+                        await sync_to_async(setattr)(request, 'status', response.status)
+                        await sync_to_async(setattr)(request, 'error_message', response.error or "")
+
+                    case 'embedding':
+                        texts = parameters.get('texts', [prompt])
+                        response = await client.create_embedding(texts)
+                        
+                        if 'error' in response:
+                            await sync_to_async(setattr)(request, 'status', 'failed')
+                            await sync_to_async(setattr)(request, 'error_message', response['error'])
+                        else:
+                            await sync_to_async(setattr)(request, 'response', json.dumps(response))
+                            await sync_to_async(setattr)(request, 'status', 'completed')
+
+                    case 'function_call':
+                        tool_name = parameters.get('tool_name', '')
+                        tool_params = parameters.get('tool_parameters', {})
+                        response = await client.execute_tool(tool_name, tool_params)
+                        
+                        if 'error' in response:
+                            await sync_to_async(setattr)(request, 'status', 'failed')
+                            await sync_to_async(setattr)(request, 'error_message', response['error'])
+                        else:
+                            await sync_to_async(setattr)(request, 'response', json.dumps(response))
+                            await sync_to_async(setattr)(request, 'status', 'completed')
+
         except Exception as e:
-            request.status = 'failed'
-            request.error_message = str(e)
+            await sync_to_async(setattr)(request, 'status', 'failed')
+            await sync_to_async(setattr)(request, 'error_message', str(e))
         
         finally:
-            request.save()
+            await sync_to_async(request.save)()
         
         return request
     
@@ -268,7 +269,7 @@ class MCPManager:
     async def get_default_server() -> Optional[MCPServer]:
         """Get the default MCP server."""
         try:
-            return MCPServer.objects.filter(is_default=True, is_active=True).first()
+            return await sync_to_async(MCPServer.objects.filter(is_default=True, is_active=True).first)()
         except MCPServer.DoesNotExist:
             return None
     
@@ -280,7 +281,7 @@ class MCPManager:
             
             # Update or create tools
             for tool_data in tools_data:
-                tool, created = MCPTool.objects.get_or_create(
+                tool, created = await sync_to_async(MCPTool.objects.get_or_create)(
                     name=tool_data['name'],
                     server=server,
                     defaults={
@@ -291,9 +292,9 @@ class MCPManager:
                 )
                 
                 if not created:
-                    tool.description = tool_data.get('description', tool.description)
-                    tool.parameters_schema = tool_data.get('parameters', tool.parameters_schema)
-                    tool.save()
+                    await sync_to_async(setattr)(tool, 'description', tool_data.get('description', tool.description))
+                    await sync_to_async(setattr)(tool, 'parameters_schema', tool_data.get('parameters', tool.parameters_schema))
+                    await sync_to_async(tool.save)()
     
     @staticmethod
     async def execute_rag_with_mcp(
