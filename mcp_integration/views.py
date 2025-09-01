@@ -1,7 +1,8 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import MCPServer, MCPRequest, MCPTool
+from asgiref.sync import sync_to_async
+from .models import MCPServer, MCPTool
 from .mcp_client import MCPManager, MCPClient
 
 
@@ -53,7 +54,7 @@ class MCPServerListView(APIView):
 
 class MCPRequestView(APIView):
     """Handle MCP requests."""
-    
+
     def post(self, request):
         """Send a request to an MCP server."""
         try:
@@ -69,15 +70,8 @@ class MCPRequestView(APIView):
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
-            if not server_id:
-                server = loop.run_until_complete(MCPManager.get_default_server())
-                if not server:
-                    return Response(
-                        {'error': 'No MCP server specified or configured'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            else:
+
+            if server_id:
                 try:
                     server = MCPServer.objects.get(id=server_id, is_active=True)
                 except MCPServer.DoesNotExist:
@@ -85,7 +79,14 @@ class MCPRequestView(APIView):
                         {'error': 'MCP server not found'},
                         status=status.HTTP_404_NOT_FOUND
                     )
-            
+            else:
+                server = loop.run_until_complete(MCPManager.get_default_server())
+                if not server:
+                    return Response(
+                        {'error': 'No MCP server specified or configured'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
             # Create and execute request
             mcp_request = loop.run_until_complete(MCPManager.create_request(
                 server=server,
@@ -93,7 +94,7 @@ class MCPRequestView(APIView):
                 prompt=prompt,
                 parameters=parameters
             ))
-            
+
             response_data = {
                 'request_id': mcp_request.id,
                 'status': mcp_request.status,
