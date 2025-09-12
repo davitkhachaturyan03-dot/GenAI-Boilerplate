@@ -15,24 +15,25 @@ help:
 	@echo "  clean     - Clean up containers and volumes"
 	@echo "  build     - Build Docker images"
 	@echo "  stop      - Stop all services"
+	@echo ""
 
 # Initial setup
 setup:
 	@echo "Setting up the project..."
 	cp .env.example .env
 	@echo "Please edit .env file with your configuration"
-	docker-compose -f docker-compose.dev.yml build
-	docker-compose -f docker-compose.dev.yml up -d postgres redis
+	docker compose -f docker-compose.dev.yml build
+	docker compose -f docker-compose.dev.yml up -d postgres redis
 	@echo "Waiting for database to be ready..."
 	sleep 10
-	docker-compose -f docker-compose.dev.yml exec web python create_migrations.py
-	docker-compose -f docker-compose.dev.yml exec web python manage.py migrate
+	docker compose -f docker-compose.dev.yml exec web python create_migrations.py
+	docker compose -f docker-compose.dev.yml exec web python manage.py migrate
 	@echo "Setup complete! Run 'make dev' to start development server"
 
 # Development environment
 dev:
 	@echo "Starting development environment..."
-	docker-compose -f docker-compose.dev.yml up --build
+	docker compose -f docker-compose.dev.yml up --build
 
 # Start MCP server only
 mcp:
@@ -50,77 +51,42 @@ dev-local:
 # Production environment
 prod:
 	@echo "Starting production environment..."
-	docker-compose -f docker-compose.prod.yml up -d --build
-
-# Run tests
-test:
-	@echo "Running tests..."
-	docker-compose -f docker-compose.dev.yml exec web python -m pytest
+	docker compose -f docker-compose.prod.yml up -d --build
 
 # Run migrations
 migrate:
 	@echo "Running migrations..."
-	docker-compose -f docker-compose.dev.yml exec web python manage.py makemigrations
-	docker-compose -f docker-compose.dev.yml exec web python manage.py migrate
-
-# Django shell
-shell:
-	docker-compose -f docker-compose.dev.yml exec web python manage.py shell
+	docker compose -f docker-compose.dev.yml exec web python manage.py makemigrations
+	docker compose -f docker-compose.dev.yml exec web python manage.py migrate
 
 # View logs
 logs:
-	docker-compose -f docker-compose.dev.yml logs -f web
-
-logs-prod:
-	docker-compose -f docker-compose.prod.yml logs -f
+	docker compose -f docker-compose.dev.yml logs -f web
 
 # Clean up
 clean:
 	@echo "Cleaning up containers and volumes..."
-	docker-compose -f docker-compose.dev.yml down -v
-	docker-compose -f docker-compose.prod.yml down -v
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.prod.yml down -v
 	docker system prune -f
 
 # Build images
 build:
-	docker-compose -f docker-compose.dev.yml build
-	docker-compose -f docker-compose.prod.yml build
+	docker compose -f docker-compose.dev.yml build
+	docker compose -f docker-compose.prod.yml build
 
 # Stop services
 stop:
-	docker-compose -f docker-compose.dev.yml down
-	docker-compose -f docker-compose.prod.yml down
+	docker compose -f docker-compose.dev.yml down
+	docker compose -f docker-compose.prod.yml down
 
-# Database backup
-backup-db:
-	@echo "Creating database backup..."
-	docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U $(DB_USER) $(DB_NAME) > backup_$(shell date +%Y%m%d_%H%M%S).sql
-
-# Restore database
-restore-db:
-	@echo "Restoring database from backup..."
-	@read -p "Enter backup file name: " backup_file; \
-	docker-compose -f docker-compose.prod.yml exec -T postgres psql -U $(DB_USER) $(DB_NAME) < $$backup_file
 
 # Create superuser
 createsuperuser:
-	docker-compose -f docker-compose.dev.yml exec web python manage.py createsuperuser
+	docker compose -f docker-compose.dev.yml exec web python manage.py createsuperuser
 
 # Collect static files
 collectstatic:
-	docker-compose -f docker-compose.dev.yml exec web python manage.py collectstatic --noinput
+	docker compose -f docker-compose.dev.yml exec web python manage.py collectstatic --noinput
 
-# Load sample data (if you create fixtures)
-loaddata:
-	docker-compose -f docker-compose.dev.yml exec web python manage.py loaddata sample_data.json
 
-# Performance monitoring
-monitor:
-	@echo "Opening monitoring dashboard..."
-	@echo "Prometheus: http://localhost:9090"
-	@echo "Grafana: http://localhost:3000 (admin/admin)"
-
-# Security scan
-security-scan:
-	@echo "Running security scan..."
-	docker run --rm -v $(PWD):/app pyupio/safety safety check -r /app/requirements.txt
