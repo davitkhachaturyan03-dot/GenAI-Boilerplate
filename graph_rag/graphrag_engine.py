@@ -13,15 +13,15 @@ class MSGraphRAGEngine:
 
     def __init__(self, project_name: str = "default"):
         self.project_name = project_name
-        self.working_dir = self._setup_working_directory()
-        self.config_path = os.path.join(self.working_dir, 'settings.yaml')
         self.app_dir = os.path.dirname(__file__)
         self.app_settings_path = os.path.join(self.app_dir, 'settings.yaml')
         self.app_prompts_dir = os.path.join(self.app_dir, 'prompts')
+        self.working_dir = self._setup_working_directory()
+        self.config_path = os.path.join(self.working_dir, 'settings.yaml')
  
     def _setup_working_directory(self) -> str:
         """Set up the working directory for GraphRAG operations."""
-        base_dir = getattr(settings, 'GRAPH_RAG_BASE_DIR', '/tmp/graphrag')
+        base_dir = getattr(settings, 'GRAPH_RAG_BASE_DIR', self.app_dir)
         project_dir = os.path.join(base_dir, self.project_name)
         
         # Create directories
@@ -42,11 +42,11 @@ class MSGraphRAGEngine:
             env = os.environ.copy()
             env['OPENAI_API_KEY'] = settings.OPENAI_API_KEY
 
-            # Build query command
+            # Build query command; use app_dir as root since it contains settings/prompts/outputs
             cmd = [
                 'graphrag',
                 'query',
-                '--root', self.working_dir,
+                '--root', self.app_dir,
                 '--method', query_type,
                 '--query', query_text
             ]
@@ -57,7 +57,7 @@ class MSGraphRAGEngine:
             # Run query
             process = subprocess.Popen(
                 cmd,
-                cwd=self.working_dir,
+                cwd=self.app_dir,
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
