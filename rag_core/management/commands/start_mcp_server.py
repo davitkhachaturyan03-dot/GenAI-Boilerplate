@@ -47,9 +47,7 @@ class Command(BaseCommand):
                 port=options['port'],
                 debug=options['debug'] or settings.DEBUG,
                 openai_api_key=os.getenv('OPENAI_API_KEY', ''),
-                anthropic_api_key=os.getenv('ANTHROPIC_API_KEY', ''),
-                cohere_api_key=os.getenv('COHERE_API_KEY', ''),
-                huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY', '')
+                anthropic_api_key=os.getenv('ANTHROPIC_API_KEY', '')
             )
             
             self.stdout.write(
@@ -77,7 +75,6 @@ class Command(BaseCommand):
         self.stdout.write(f"📋 Available providers:")
         self.stdout.write(f"   - OpenAI: {'✅' if config.openai_api_key else '❌'}")
         self.stdout.write(f"   - Anthropic: {'✅' if config.anthropic_api_key else '❌'}")
-        self.stdout.write(f"   - Cohere: {'✅' if config.cohere_api_key else '❌'}")
         self.stdout.write(f"🔗 Health check: http://{config.host}:{config.port}/health")
         
         runner = web.AppRunner(server.app)
