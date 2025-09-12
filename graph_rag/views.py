@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .graphrag_engine import GraphRAGEngine
+from .graphrag_engine import MSGraphRAGEngine
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class GraphRAGQueryView(APIView):
     async def _run_query(self, project_name: str, query_text: str, query_type: str):
         """Run query in background."""
         try:
-            engine = GraphRAGEngine(project_name)
+            engine = MSGraphRAGEngine(project_name)
             result = await engine.query_graphrag(
                 query_text, query_type
             )

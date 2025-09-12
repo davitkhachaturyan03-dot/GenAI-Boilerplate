@@ -6,7 +6,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-class GraphRAGEngine:
+class MSGraphRAGEngine:
     """
     GraphRAG Engine that handles subprocess integration with Microsoft's GraphRAG package.
     """
